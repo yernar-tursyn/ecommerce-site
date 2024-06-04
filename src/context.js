@@ -1,18 +1,22 @@
 import React, { Component } from "react";
 import { storeProducts, detailProduct } from "./data";
+
 const ProductContext = React.createContext();
 
 class ProductProvider extends Component {
     state = {
         products: [],
+        filteredProducts: [],
         detailProduct: detailProduct,
         cart: [],
         modalOpen: false,
         modalProduct: detailProduct,
         cartSubTotal: 0,
         cartTax: 0,
-        cartTotal: 0
+        cartTotal: 0,
+        searchQuery: ''
     };
+
     componentDidMount() {
         this.setProducts();
     }
@@ -24,21 +28,32 @@ class ProductProvider extends Component {
             products = [...products, singleItem];
         });
         this.setState(() => {
-            return { products };
-        }, this.checkCartItems);
+            return { products, filteredProducts: products };
+        });
     };
 
-    getItem = id => {
-        const product = this.state.products.find(item => item.id === id);
-        return product;
+    handleSearch = (query) => {
+        this.setState({
+            searchQuery: query,
+            filteredProducts: this.state.products.filter(product =>
+                product.title.toLowerCase().includes(query.toLowerCase())
+            )
+        });
     };
-    handleDetail = id => {
+
+    handleDetail = (id) => {
         const product = this.getItem(id);
         this.setState(() => {
             return { detailProduct: product };
         });
     };
-    addToCart = id => {
+
+    getItem = (id) => {
+        const product = this.state.products.find(item => item.id === id);
+        return product;
+    };
+
+    addToCart = (id) => {
         let tempProducts = [...this.state.products];
         const index = tempProducts.indexOf(this.getItem(id));
         const product = tempProducts[index];
@@ -55,17 +70,20 @@ class ProductProvider extends Component {
             };
         }, this.addTotals);
     };
+
     openModal = id => {
         const product = this.getItem(id);
         this.setState(() => {
             return { modalProduct: product, modalOpen: true };
         });
     };
+
     closeModal = () => {
         this.setState(() => {
             return { modalOpen: false };
         });
     };
+
     increment = id => {
         let tempCart = [...this.state.cart];
         const selectedProduct = tempCart.find(item => {
@@ -81,6 +99,7 @@ class ProductProvider extends Component {
             };
         }, this.addTotals);
     };
+
     decrement = id => {
         let tempCart = [...this.state.cart];
         const selectedProduct = tempCart.find(item => {
@@ -98,13 +117,8 @@ class ProductProvider extends Component {
             }, this.addTotals);
         }
     };
+
     getTotals = () => {
-        // const subTotal = this.state.cart
-        //   .map(item => item.total)
-        //   .reduce((acc, curr) => {
-        //     acc = acc + curr;
-        //     return acc;
-        //   }, 0);
         let subTotal = 0;
         this.state.cart.map(item => (subTotal += item.total));
         const tempTax = subTotal * 0.1;
@@ -116,6 +130,7 @@ class ProductProvider extends Component {
             total
         };
     };
+
     addTotals = () => {
         const totals = this.getTotals();
         this.setState(
@@ -125,12 +140,10 @@ class ProductProvider extends Component {
                     cartTax: totals.tax,
                     cartTotal: totals.total
                 };
-            },
-            () => {
-                // console.log(this.state);
             }
         );
     };
+
     removeItem = id => {
         let tempProducts = [...this.state.products];
         let tempCart = [...this.state.cart];
@@ -152,6 +165,7 @@ class ProductProvider extends Component {
             };
         }, this.addTotals);
     };
+
     clearCart = () => {
         this.setState(
             () => {
@@ -163,11 +177,13 @@ class ProductProvider extends Component {
             }
         );
     };
+
     render() {
         return (
             <ProductContext.Provider
                 value={{
                     ...this.state,
+                    handleSearch: this.handleSearch,
                     handleDetail: this.handleDetail,
                     addToCart: this.addToCart,
                     openModal: this.openModal,
