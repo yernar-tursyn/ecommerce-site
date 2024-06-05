@@ -37,16 +37,6 @@ export default class Navbar extends Component {
                   </Link>
                 </li>
                 <li className="nav-item ml-5">
-                  <Link to="/3d-design" className="nav-link">
-                    3D Дизайн
-                  </Link>
-                </li>
-                <li className="nav-item ml-5">
-                  <Link to="/business" className="nav-link">
-                    Для бизнеса
-                  </Link>
-                </li>
-                <li className="nav-item ml-5">
                   <Link to="/delivery" className="nav-link">
                     Доставка
                   </Link>

@@ -19,6 +19,7 @@ class ProductProvider extends Component {
 
     componentDidMount() {
         this.setProducts();
+        this.loadCartFromLocalStorage();
     }
 
     setProducts = () => {
@@ -30,6 +31,30 @@ class ProductProvider extends Component {
         this.setState(() => {
             return { products, filteredProducts: products };
         });
+    };
+
+    saveCartToLocalStorage = () => {
+        localStorage.setItem('cart', JSON.stringify(this.state.cart));
+        localStorage.setItem('cartTotals', JSON.stringify({
+            cartSubTotal: this.state.cartSubTotal,
+            cartTax: this.state.cartTax,
+            cartTotal: this.state.cartTotal
+        }));
+    };
+
+    loadCartFromLocalStorage = () => {
+        const cart = JSON.parse(localStorage.getItem('cart'));
+        const cartTotals = JSON.parse(localStorage.getItem('cartTotals'));
+        if (cart) {
+            this.setState(() => {
+                return {
+                    cart: cart,
+                    cartSubTotal: cartTotals ? cartTotals.cartSubTotal : 0,
+                    cartTax: cartTotals ? cartTotals.cartTax : 0,
+                    cartTotal: cartTotals ? cartTotals.cartTotal : 0
+                };
+            });
+        }
     };
 
     handleSearch = (query) => {
@@ -68,7 +93,10 @@ class ProductProvider extends Component {
                 cart: [...this.state.cart, product],
                 detailProduct: { ...product }
             };
-        }, this.addTotals);
+        }, () => {
+            this.addTotals();
+            this.saveCartToLocalStorage();
+        });
     };
 
     openModal = id => {
@@ -97,7 +125,10 @@ class ProductProvider extends Component {
             return {
                 cart: [...tempCart]
             };
-        }, this.addTotals);
+        }, () => {
+            this.addTotals();
+            this.saveCartToLocalStorage();
+        });
     };
 
     decrement = id => {
@@ -114,13 +145,16 @@ class ProductProvider extends Component {
             product.total = product.count * product.price;
             this.setState(() => {
                 return { cart: [...tempCart] };
-            }, this.addTotals);
+            }, () => {
+                this.addTotals();
+                this.saveCartToLocalStorage();
+            });
         }
     };
 
     getTotals = () => {
         let subTotal = 0;
-        this.state.cart.map(item => (subTotal += item.total));
+        this.state.cart.forEach(item => (subTotal += item.total));
         const tempTax = subTotal * 0.1;
         const tax = parseFloat(tempTax.toFixed(2));
         const total = subTotal + tax;
@@ -163,7 +197,10 @@ class ProductProvider extends Component {
                 cart: [...tempCart],
                 products: [...tempProducts]
             };
-        }, this.addTotals);
+        }, () => {
+            this.addTotals();
+            this.saveCartToLocalStorage();
+        });
     };
 
     clearCart = () => {
@@ -174,6 +211,7 @@ class ProductProvider extends Component {
             () => {
                 this.setProducts();
                 this.addTotals();
+                this.saveCartToLocalStorage();
             }
         );
     };
