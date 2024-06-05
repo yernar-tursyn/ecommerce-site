@@ -1,5 +1,4 @@
 import React, { Component } from "react";
-import { storeProducts, detailProduct } from "./data";
 
 const ProductContext = React.createContext();
 
@@ -7,10 +6,10 @@ class ProductProvider extends Component {
     state = {
         products: [],
         filteredProducts: [],
-        detailProduct: detailProduct,
+        detailProduct: {},
         cart: [],
         modalOpen: false,
-        modalProduct: detailProduct,
+        modalProduct: {},
         cartSubTotal: 0,
         cartTax: 0,
         cartTotal: 0,
@@ -18,19 +17,21 @@ class ProductProvider extends Component {
     };
 
     componentDidMount() {
-        this.setProducts();
-        this.loadCartFromLocalStorage();
+        this.getProducts();
+        this.getCart();
     }
 
-    setProducts = () => {
-        let products = [];
-        storeProducts.forEach(item => {
-            const singleItem = { ...item };
-            products = [...products, singleItem];
-        });
-        this.setState(() => {
-            return { products, filteredProducts: products };
-        });
+    getProducts = async () => {
+        const response = await fetch('http://localhost:5000/api/products');
+        const products = await response.json();
+        this.setState({ products, filteredProducts: products });
+    };
+
+    getCart = async () => {
+        const response = await fetch('http://localhost:5000/api/cart');
+        const cart = await response.json();
+        console.log("Loaded cart from server:", cart); // Log the loaded cart
+        this.setState({ cart }, this.addTotals);
     };
 
     saveCartToLocalStorage = () => {
@@ -40,21 +41,6 @@ class ProductProvider extends Component {
             cartTax: this.state.cartTax,
             cartTotal: this.state.cartTotal
         }));
-    };
-
-    loadCartFromLocalStorage = () => {
-        const cart = JSON.parse(localStorage.getItem('cart'));
-        const cartTotals = JSON.parse(localStorage.getItem('cartTotals'));
-        if (cart) {
-            this.setState(() => {
-                return {
-                    cart: cart,
-                    cartSubTotal: cartTotals ? cartTotals.cartSubTotal : 0,
-                    cartTax: cartTotals ? cartTotals.cartTax : 0,
-                    cartTotal: cartTotals ? cartTotals.cartTotal : 0
-                };
-            });
-        }
     };
 
     handleSearch = (query) => {
@@ -78,25 +64,41 @@ class ProductProvider extends Component {
         return product;
     };
 
-    addToCart = (id) => {
-        let tempProducts = [...this.state.products];
-        const index = tempProducts.indexOf(this.getItem(id));
-        const product = tempProducts[index];
-        product.inCart = true;
-        product.count = 1;
-        const price = product.price;
-        product.total = price;
-
-        this.setState(() => {
-            return {
-                products: [...tempProducts],
-                cart: [...this.state.cart, product],
-                detailProduct: { ...product }
-            };
-        }, () => {
-            this.addTotals();
-            this.saveCartToLocalStorage();
+    addToCart = async (id) => {
+        const product = this.getItem(id);
+        const response = await fetch('http://localhost:5000/api/cart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(product)
         });
+        const cartProduct = await response.json();
+        console.log("Added to cart:", cartProduct); // Log the added product
+        this.setState(
+            (prevState) => {
+                const updatedProducts = prevState.products.map(p =>
+                    p.id === id ? { ...p, inCart: true } : p
+                );
+                const updatedCart = [...prevState.cart];
+                const productInCart = updatedCart.find(item => item.id === cartProduct.id);
+                if (productInCart) {
+                    productInCart.count += 1;
+                    productInCart.total = productInCart.count * productInCart.price;
+                } else {
+                    updatedCart.push(cartProduct);
+                }
+                return {
+                    products: updatedProducts,
+                    cart: updatedCart,
+                    detailProduct: { ...product, inCart: true }
+                };
+            },
+            () => {
+                this.addTotals();
+                this.saveCartToLocalStorage();
+            }
+        );
     };
 
     openModal = id => {
@@ -112,43 +114,55 @@ class ProductProvider extends Component {
         });
     };
 
-    increment = id => {
-        let tempCart = [...this.state.cart];
-        const selectedProduct = tempCart.find(item => {
-            return item.id === id;
+    increment = async (id) => {
+        const product = this.state.cart.find(item => item.id === id);
+        const response = await fetch(`http://localhost:5000/api/cart/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ count: product.count + 1 })
         });
-        const index = tempCart.indexOf(selectedProduct);
-        const product = tempCart[index];
-        product.count = product.count + 1;
-        product.total = product.count * product.price;
-        this.setState(() => {
-            return {
-                cart: [...tempCart]
-            };
-        }, () => {
-            this.addTotals();
-            this.saveCartToLocalStorage();
-        });
-    };
-
-    decrement = id => {
-        let tempCart = [...this.state.cart];
-        const selectedProduct = tempCart.find(item => {
-            return item.id === id;
-        });
-        const index = tempCart.indexOf(selectedProduct);
-        const product = tempCart[index];
-        product.count = product.count - 1;
-        if (product.count === 0) {
-            this.removeItem(id);
-        } else {
-            product.total = product.count * product.price;
-            this.setState(() => {
-                return { cart: [...tempCart] };
-            }, () => {
+        const updatedProduct = await response.json();
+        this.setState(
+            (prevState) => {
+                const updatedCart = prevState.cart.map(p =>
+                    p.id === id ? updatedProduct : p
+                );
+                return { cart: updatedCart };
+            },
+            () => {
                 this.addTotals();
                 this.saveCartToLocalStorage();
+            }
+        );
+    };
+
+    decrement = async (id) => {
+        const product = this.state.cart.find(item => item.id === id);
+        if (product.count > 1) {
+            const response = await fetch(`http://localhost:5000/api/cart/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ count: product.count - 1 })
             });
+            const updatedProduct = await response.json();
+            this.setState(
+                (prevState) => {
+                    const updatedCart = prevState.cart.map(p =>
+                        p.id === id ? updatedProduct : p
+                    );
+                    return { cart: updatedCart };
+                },
+                () => {
+                    this.addTotals();
+                    this.saveCartToLocalStorage();
+                }
+            );
+        } else {
+            this.removeItem(id);
         }
     };
 
@@ -178,32 +192,32 @@ class ProductProvider extends Component {
         );
     };
 
-    removeItem = id => {
-        let tempProducts = [...this.state.products];
-        let tempCart = [...this.state.cart];
-
-        const index = tempProducts.indexOf(this.getItem(id));
-        let removedProduct = tempProducts[index];
-        removedProduct.inCart = false;
-        removedProduct.count = 0;
-        removedProduct.total = 0;
-
-        tempCart = tempCart.filter(item => {
-            return item.id !== id;
+    removeItem = async (id) => {
+        await fetch(`http://localhost:5000/api/cart/${id}`, {
+            method: 'DELETE'
         });
-
-        this.setState(() => {
-            return {
-                cart: [...tempCart],
-                products: [...tempProducts]
-            };
-        }, () => {
-            this.addTotals();
-            this.saveCartToLocalStorage();
-        });
+        this.setState(
+            (prevState) => {
+                const updatedProducts = prevState.products.map(p =>
+                    p.id === id ? { ...p, inCart: false } : p
+                );
+                const updatedCart = prevState.cart.filter(item => item.id !== id);
+                return {
+                    products: updatedProducts,
+                    cart: updatedCart
+                };
+            },
+            () => {
+                this.addTotals();
+                this.saveCartToLocalStorage();
+            }
+        );
     };
 
-    clearCart = () => {
+    clearCart = async () => {
+        await fetch('http://localhost:5000/api/cart', {
+            method: 'DELETE'
+        });
         this.setState(
             () => {
                 return { cart: [] };
@@ -221,6 +235,8 @@ class ProductProvider extends Component {
             <ProductContext.Provider
                 value={{
                     ...this.state,
+                    getProducts: this.getProducts,
+                    getCart: this.getCart,
                     handleSearch: this.handleSearch,
                     handleDetail: this.handleDetail,
                     addToCart: this.addToCart,
